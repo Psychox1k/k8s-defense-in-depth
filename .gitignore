@@ -1,0 +1,25 @@
+.DS_Store
+.pf.pid
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+
+# Secrets and keys
+.env
+*.pem
+*.key
+kubeconfig*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Experiment output
+results/
+*.log
+.idea/
