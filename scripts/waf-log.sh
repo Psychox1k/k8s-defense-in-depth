@@ -21,7 +21,15 @@ read_log() {
   fi
 }
 
-read_log | python3 -I -c '
+# Read the log first, so a failing kubectl (cluster stopped, wrong context) is reported
+# as an error instead of looking like "no attacks were found".
+if ! log=$(read_log); then
+  echo "Error: cannot read the WAF log. Is the lab running ('make up') and is kubectl" >&2
+  echo "pointing at the right cluster ('kubectl config current-context')?" >&2
+  exit 1
+fi
+
+printf '%s\n' "$log" | python3 -I -c '
 import json, re, sys
 
 limit = int(sys.argv[1])
