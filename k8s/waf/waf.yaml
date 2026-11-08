@@ -63,6 +63,16 @@ spec:
               memory: 128Mi
             limits:
               memory: 256Mi
+          volumeMounts:
+            # Our exclusions replace the image's empty example file
+            - name: exclusions
+              mountPath: /etc/modsecurity.d/owasp-crs/rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf
+              subPath: REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf
+              readOnly: true
+      volumes:
+        - name: exclusions
+          configMap:
+            name: waf-exclusions
 ---
 apiVersion: v1
 kind: Service

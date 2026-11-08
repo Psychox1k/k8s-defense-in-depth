@@ -1,0 +1,24 @@
+# Custom CRS rule exclusions, loaded before the Core Rule Set.
+# Mounted into the WAF container as REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf.
+#
+# Local rule ids use the 10000-19999 range (CRS itself uses 900000-999999).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: waf-exclusions
+  namespace: defense-lab
+  labels:
+    app: waf
+data:
+  REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf: |
+    # False positive found in week 1:
+    # Juice Shop uses socket.io long-polling, which sends POST requests with
+    # Content-Type: text/plain. CRS rule 920420 ("Request content type is not
+    # allowed by policy") scores it as critical (5) and the request is blocked.
+    # The exclusion is narrow: only this one rule, only for the /socket.io/ path.
+    SecRule REQUEST_FILENAME "@beginsWith /socket.io/" \
+        "id:10001,\
+        phase:1,\
+        pass,\
+        nolog,\
+        ctl:ruleRemoveById=920420"

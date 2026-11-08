@@ -14,8 +14,12 @@ attacked in a controlled way in five configurations, and the layers are compared
 rate, false positives, time to detect/respond and performance overhead. A custom Python service
 correlates events from all layers and responds automatically.
 
-Timeline: about 6 months, from October 2026 to April 2027. The supervisor expects visible
-progress every week, so keep `docs/progress/week-NN.md` up to date.
+Timeline: from October 2026 to the end of February 2027 (project, experiments and thesis text).
+The schedule is tight. The supervisor expects visible progress every week, so keep
+`docs/progress/week-NN.md` up to date.
+
+**The week-by-week plan, branches and milestones are in `docs/ROADMAP.md`.** Read it at the start
+of a session to know which week and branch the work belongs to, and tick off finished tasks there.
 
 ## Architecture
 
@@ -43,11 +47,11 @@ Experiment configurations: (1) no protection, (2) WAF only, (3) WAF + Suricata,
 ```
 k8s/base/      namespace and the vulnerable application (apply order is by filename prefix)
 k8s/waf/       nginx + ModSecurity + CRS
-scripts/       prerequisite check, attack demo, later: lab-up/down, experiments, cost guard
+scripts/       check-prereqs.sh, attack-demo.sh, waf-log.sh; later: lab-up/down, experiments, cost guard
 terraform/     AWS infrastructure (planned)
 ansible/       node configuration (planned)
 responder/     automatic response service (planned)
-docs/          thesis notes and weekly progress
+docs/          ROADMAP.md, weekly progress (docs/progress/), thesis notes
 ```
 
 ## Commands
@@ -55,7 +59,7 @@ docs/          thesis notes and weekly progress
 ```bash
 make up        # k3d cluster + Juice Shop + WAF (+ port-forward on :8081)
 make attack    # same attacks directly (:8081) and through the WAF (:8080)
-make logs      # recent ModSecurity matches from the WAF logs
+make logs      # requests matched by the WAF with the CRS rules that fired (hides /socket.io/)
 make status    # pods and services
 make down      # delete the cluster
 ```
@@ -78,7 +82,12 @@ make down      # delete the cluster
   pin image versions once a setup works.
 - Every experiment must be repeatable from a script and write raw results (CSV/JSON) to `results/`,
   with timestamps for attack start and end.
-- Commit messages: short imperative summary, one logical change per commit.
+- Git: `main` must always work. New work goes on a branch from `main` (`feat/...`, `fix/...`,
+  `docs/...`, `chore/...`, names as in `docs/ROADMAP.md`), merged through a pull request.
+  Use `git switch` / `git restore`, not `git checkout`.
+- Commit messages: Conventional Commits (`feat(waf): ...`, `fix(scripts): ...`, `docs: ...`),
+  short imperative summary, one logical change per commit.
+- Do not commit, push, merge or create tags unless asked.
 - Documentation and comments in English. Thesis text itself is in Polish and lives outside this repo
   or under `docs/`.
 
@@ -95,10 +104,11 @@ make down      # delete the cluster
 
 ## Current status
 
-- Done: repository structure, local k3d cluster, Juice Shop, Layer 1 (nginx + ModSecurity + CRS),
-  demo attack script.
-- Next: CRS tuning and false-positive measurement, rate limiting, JSON logs to Loki + Grafana,
-  then Falco and Cilium, then Terraform/Ansible for AWS.
+- Done (week 1, tag `v0.1-layer1`): repository structure, local k3d cluster, Juice Shop,
+  Layer 1 (nginx + ModSecurity + CRS), attack demo, WAF log parser.
+- Known issues: CRS rule 920420 blocks Juice Shop `/socket.io/` polling (false positive);
+  the WAF sees the node IP (10.42.x.x) instead of the real client IP; images use `latest`.
+- Now: week 2, branch `feat/waf-tuning` (see `docs/ROADMAP.md`).
 
 (Update this section at the end of every working session.)
 

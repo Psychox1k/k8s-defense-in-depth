@@ -3,6 +3,7 @@
 #   1) directly to the vulnerable app (no protection)
 #   2) through nginx + ModSecurity + OWASP CRS
 #
+# Lab use only. Run this against your own local cluster.
 set -u
 
 DIRECT="${DIRECT_URL:-http://localhost:8081}"
@@ -32,6 +33,15 @@ benign() {
     --data-urlencode 'q=apple'
 }
 
+# Legitimate Juice Shop traffic that CRS rule 920420 used to block (week 1 finding).
+# Without a valid session id the app itself answers 400; what matters is that the WAF
+# does not answer 403.
+socketio_poll() {
+  curl -s -o /dev/null -w '%{http_code}' -X POST \
+    "$1/socket.io/?EIO=4&transport=polling&t=demo" \
+    -H 'Content-Type: text/plain;charset=UTF-8' --data '40'
+}
+
 # Is the target reachable at all?
 reachable() {
   code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$1/")
@@ -50,8 +60,8 @@ verdict() {
   case "$2:$1" in
     attack:403) printf '%sBLOCKED (%s)%s' "$GREEN" "$1" "$RESET" ;;
     attack:*)   printf '%sPASSED THROUGH (%s)%s' "$RED" "$1" "$RESET" ;;
-    normal:2*)  printf '%sallowed (%s)%s' "$GREEN" "$1" "$RESET" ;;
-    normal:*)   printf '%sFALSE POSITIVE? (%s)%s' "$YELLOW" "$1" "$RESET" ;;
+    normal:403) printf '%sFALSE POSITIVE (%s)%s' "$YELLOW" "$1" "$RESET" ;;
+    normal:*)   printf '%snot blocked (%s)%s' "$GREEN" "$1" "$RESET" ;;
   esac
 }
 
@@ -68,5 +78,6 @@ run_case "SQL injection (login)"   sqli_login     attack
 run_case "XSS (product search)"    xss_search     attack
 run_case "Path traversal"          path_traversal attack
 run_case "Normal request"          benign         normal
+run_case "socket.io polling"       socketio_poll  normal
 echo
 echo "Matched rules: run 'make logs'"
