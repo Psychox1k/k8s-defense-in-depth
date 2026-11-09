@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: waf-rate-limit
+  namespace: defense-lab
+  labels:
+    app: waf
+data:
+  rate-limit.conf: |
+    # The zone key is empty for every URL except the login endpoint. nginx does not count
+    # requests with an empty key, so only /rest/user/login is limited, per client IP.
+    map $request_uri $login_limit_key {
+        default                      "";
+        ~^/rest/user/login(\?.*)?$   $binary_remote_addr;
+    }
+ 
+    # 10 requests per minute per IP, plus a burst of 5 handled immediately.
+    # More than that gets HTTP 429 until the bucket refills (one slot per 6 seconds).
+    limit_req_zone $login_limit_key zone=login:10m rate=10r/m;
+    limit_req zone=login burst=5 nodelay;
+    limit_req_status 429;
+    limit_req_log_level warn;
