@@ -4,16 +4,17 @@ Engineering thesis: multi-layer detection and automatic response to web applicat
 attacks in Kubernetes on AWS. Final deadline: **end of February 2027** (project, experiments
 and thesis text).
 
-The plan is a sequence of stages, not a calendar. Stages are done in order; each one ends
-with something that can be shown to the supervisor ("Demo") and a short note for the thesis
-("Thesis"). Actual dates are not planned in advance: they come from git (commit and tag dates)
-and are filled into the progress log at the end of the project.
+There are two targets:
 
-Each weekly meeting: show whatever was finished since the last one and write it down in
-`docs/progress/week-NN.md`.
+1. **Beta, 15 December 2026.** Everything works end to end locally on k3d (see "Beta plan").
+2. **Final, end of February 2027.** The beta moved to AWS, experiments done, thesis written.
 
-If time runs short, cut in this order: optional extras, then paranoia level 3 and extra
-cluster scenarios. The core (three layers, responder, experiments, thesis text) stays.
+Each stage ends with something that can be shown to the supervisor ("Demo") and a short note for
+the thesis ("Thesis"). Each weekly meeting: show whatever was finished since the last one and
+write it down in `docs/progress/week-NN.md`.
+
+Nothing is removed from the final scope. The beta only changes the order: what is needed for a
+working end-to-end demo comes first, the rest follows (see "After the beta").
 
 ## Git workflow
 
@@ -40,12 +41,60 @@ git switch main && git pull && git branch -d feat/<name>
 
 | Tag | Content |
 |---|---|
-| `v0.1-layer1` | WAF prototype over Juice Shop on k3d |
-| `v0.2-layer1` | tuned WAF, rate limiting, Grafana, own vulnerable API |
-| `v0.3-runtime` | Falco, Cilium, NetworkPolicy, cluster attack scenarios |
-| `v0.4-aws` | whole lab on AWS from Terraform + Ansible, Suricata |
-| `v0.5-responder` | automatic response working end to end on AWS |
+| `v0.1-layer1` | WAF prototype over Juice Shop on k3d (done) |
+| `v0.2-waf-tuning` | socket.io false positive fixed, stop/start targets (done) |
+| `v0.3-layer1` | pinned images, attacker pod, rate limiting: layer 1 complete |
+| `v0.4-observability` | Loki + Grafana, WAF dashboard |
+| `v0.5-runtime` | NetworkPolicy and Falco (local) |
+| `v0.6-network` | Suricata (local) and a dashboard with all layers |
+| `v0.9-beta` | beta: responder blocks the attacker, Telegram alert, `make demo` |
+| `v1.0-rc1` | the whole lab on AWS from Terraform + Ansible, full responder |
 | `v1.0` | experiments done, results and charts in the repo |
+
+## Beta plan (target: 15 December 2026)
+
+**Beta = one command shows the whole idea locally:** an attacker pod inside the cluster attacks
+the app, the WAF, Suricata and Falco see it, events appear in Grafana, a NetworkPolicy closes the
+WAF bypass, and the responder blocks the attacker IP and sends a Telegram alert.
+
+Weekly targets (Monday to Sunday). They are targets, not promises: if a week slips, the stage
+moves, the scope of the beta shrinks (see the cut line), the final deadline does not change.
+
+| Week | Window | Stage | Result |
+|---|---|---|---|
+| 3 | 9-15 Nov | 1.2 pinned images, attacker pod, rate limiting | `v0.3-layer1` |
+| 4 | 16-22 Nov | 1.3 Loki + Grafana, WAF dashboard | `v0.4-observability` |
+| 5 | 23-29 Nov | 2.2 NetworkPolicy, 2.1 Falco | `v0.5-runtime` |
+| 6 | 30 Nov-6 Dec | 3.3a Suricata on k3d, dashboard with all layers | `v0.6-network` |
+| 7 | 7-13 Dec | 4.1 responder core, 4.2a block IP + Telegram | demo works |
+| 8 | 14-15 Dec | freeze: `make demo`, README, bug fixes | `v0.9-beta` |
+
+Decisions for the beta (all revisited after it):
+- Local first (k3d), AWS after the beta. Nothing in the beta may depend on AWS.
+- Attacks come from a pod inside the cluster, so the WAF sees a real client IP.
+- NetworkPolicy with the controller built into k3s. Cilium and Hubble come after the beta.
+- Suricata runs as a DaemonSet on the node. VPC Traffic Mirroring is the AWS version of the same idea.
+- Juice Shop is the only target. The own vulnerable API comes after the beta.
+
+Risks and the cut line:
+- Falco needs eBPF support in the OrbStack VM. Check it at the start of week 5 (one hour). If it does
+  not work, Falco moves to AWS and the beta shows two layers plus NetworkPolicy.
+- Suricata on k3d is the least certain part. If by 1 December the responder core is not started,
+  Suricata moves after the beta first.
+- The responder is never cut: even with WAF events only, it is the part that makes the system "automatic".
+
+## After the beta (16 December - end of February)
+
+Suggested checkpoints (they move with git dates, like everything else):
+
+| By | What |
+|---|---|
+| mid January | the lab runs on AWS from Terraform + Ansible, Suricata with Traffic Mirroring, `v1.0-rc1` |
+| early February | experiments (five configurations, several repeats) done, raw results in `results/` |
+| mid February | analysis, charts, `v1.0` |
+| end of February | thesis text finished, corrections, defense materials |
+
+Thesis chapters are written alongside the work, not at the end: each stage below has a "Thesis" line.
 
 ## Phase 0. Prototype (done)
 
@@ -62,102 +111,121 @@ git switch main && git pull && git branch -d feat/<name>
 Learn: how CRS works (anomaly scoring, paranoia levels, rule exclusions), nginx configuration,
 Helm, log pipelines.
 
-### 1.1 WAF tuning - `feat/waf-tuning`
-- [ ] Pin image versions (Juice Shop, WAF) instead of `latest`
-- [ ] `make stop` / `make start`; `waf-log.sh` fails loudly when kubectl does not work
-- [ ] Rule exclusion for the `/socket.io/` false positive (custom rules file via ConfigMap)
-- [ ] Verify which image env variables really apply (`PARANOIA`, `ANOMALY_INBOUND`)
-- [ ] Compare paranoia levels 1 and 2 (3 optional): what each blocks, how many false positives
-- Demo: false positive gone; table "attacks blocked / false positives" per paranoia level.
+### 1.1 WAF tuning - `feat/waf-tuning` (done, `v0.2-waf-tuning`)
+- [x] `make stop` / `make start`; `waf-log.sh` fails loudly when kubectl does not work
+- [x] Rule exclusion for the `/socket.io/` false positive (custom rules file via ConfigMap)
+- Demo: false positive gone, attacks still blocked.
 - Thesis: WAF and OWASP CRS section.
 
-### 1.2 Rate limiting and client IP - `feat/rate-limit`
-- [ ] Preserve the real client IP (`externalTrafficPolicy: Local` or `X-Forwarded-For`)
-- [ ] nginx `limit_req` on the login endpoint
-- [ ] Brute force demo (hydra or ffuf): direct vs through WAF
-- Demo: brute force throttled, real attacker IP in the WAF log.
+### 1.2 Pinned images, attacker pod, rate limiting - `feat/rate-limit` (beta, week 3)
+- [x] Verify which image env variables apply (checked against the image sources; `PROXY` does not
+      exist for nginx, `PARANOIA` is deprecated in favour of `BLOCKING_PARANOIA` and `DETECTION_PARANOIA`)
+- [ ] Pin images to digests (`make pin`) instead of `latest`
+- [ ] Attacker pod in the cluster; `make attack` runs from it, so the WAF sees a real client IP
+- [ ] nginx `limit_req` on the login endpoint (ConfigMap `waf-rate-limit`)
+- [ ] Brute force case in `attack-demo.sh`: direct (not throttled) vs through the WAF (HTTP 429)
+- Demo: brute force throttled, attacker pod IP visible in the WAF log.
+- Thesis: rate limiting and the role of the client IP.
+- Later, on AWS: `externalTrafficPolicy: Local` or PROXY protocol to keep the client IP behind a load balancer.
 
-### 1.3 Observability - `feat/observability`
-- [ ] Loki + Grafana (+ log collector) via Helm in a `monitoring` namespace
+### 1.3 Observability - `feat/observability` (beta, week 4)
+- [ ] Loki + Grafana (+ log collector) via Helm in a `monitoring` namespace, small resource limits
 - [ ] WAF JSON audit log parsed into Loki with labels (rule id, client IP, status)
-- [ ] Grafana dashboard: blocked requests over time, top rules, top IPs
-- Demo: run `make attack`, events appear on the dashboard.
+- [ ] Grafana dashboard: blocked requests over time, top rules, top IPs, 429 count
+- Demo: run `make attack`, events appear on the dashboard. Tag `v0.4-observability`.
 - Thesis: chapter 1 (introduction, goal, scope).
 
-### 1.4 Own vulnerable API - `feat/vuln-api`
+### 1.4 Own vulnerable API - `feat/vuln-api` (after the beta)
 - [ ] Small FastAPI app with 2-3 deliberate vulnerabilities (SQLi, command injection, SSRF)
 - [ ] Dockerfile (arm64), manifests, routed through the WAF; pytest for normal behaviour
 - [ ] Extend `attack-demo.sh` with these attacks
-- Demo: own app exploited directly, protected through the WAF. Tag `v0.2-layer1`.
+- Demo: own app exploited directly, protected through the WAF.
 - Thesis: threat model (OWASP Top 10 relevant to the lab).
+
+### 1.5 Paranoia level comparison - `feat/paranoia` (after the beta)
+- [ ] Compare paranoia levels 1 and 2 (3 optional): what each blocks, how many false positives
+- Demo: table "attacks blocked / false positives" per paranoia level.
+- Thesis: input for the experiments chapter.
 
 ## Phase 2. Runtime layer
 
-Learn: eBPF basics, Falco rules, CNI and Cilium, NetworkPolicy, Kubernetes RBAC and service accounts.
+Learn: eBPF basics, Falco rules, NetworkPolicy, CNI and Cilium, Kubernetes RBAC and service accounts.
 
-### 2.1 Falco - `feat/falco`
-- [ ] Falco via Helm; check if it works in the local VM (if not, note it and do it on AWS)
-- [ ] Default rules: shell in a container, reading sensitive files, unexpected network tools
-- [ ] Falco events to Loki (Falcosidekick)
-- Demo: `kubectl exec` into the app pod, Falco alert appears in Grafana.
-- Thesis: Kubernetes architecture and container threats.
-
-### 2.2 Cilium and NetworkPolicy - `feat/cilium-netpol`
-- [ ] k3d cluster with Cilium as CNI (flannel disabled), Hubble UI
-- [ ] NetworkPolicy: the app accepts traffic only from the WAF (closes the WAF bypass)
-- [ ] Default deny in `defense-lab`, explicit allows
-- Demo: request from another pod straight to `juiceshop:3000` blocked, visible in Hubble.
+### 2.2 NetworkPolicy - `feat/netpol` (beta, week 5)
+- [ ] Default deny in `defense-lab`, explicit allows (attacker -> WAF, WAF -> app, monitoring)
+- [ ] The app accepts traffic only from the WAF (closes the WAF bypass)
+- [ ] Check that the k3s built-in network policy controller enforces the rules
+- Demo: request from the attacker pod straight to `juiceshop:3000` is blocked, through the WAF it works.
 - Thesis: IDS/IPS, WAF and runtime security theory.
 
-### 2.3 Cluster attack scenarios - `feat/k8s-attacks`
+### 2.1 Falco - `feat/falco` (beta, week 5)
+- [ ] First: check if eBPF works in the local VM (one hour); if not, note it and move this to AWS
+- [ ] Falco via Helm; default rules: shell in a container, reading sensitive files, unexpected network tools
+- [ ] Falco events to Loki (Falcosidekick)
+- Demo: `kubectl exec` into the app pod, Falco alert appears in Grafana. Tag `v0.5-runtime`.
+- Thesis: Kubernetes architecture and container threats.
+
+### 2.4 Cilium and Hubble - `feat/cilium` (after the beta)
+- [ ] k3d cluster with Cilium as CNI (flannel disabled), Hubble UI
+- [ ] The same NetworkPolicies on Cilium, flow visibility in Hubble
+- Demo: blocked request visible in Hubble.
+
+### 2.3 Cluster attack scenarios - `feat/k8s-attacks` (after the beta)
 - [ ] Scenarios: service account token abuse, lateral movement between pods, kube-hunter scan
 - [ ] Custom Falco rules for these scenarios
 - [ ] kube-bench baseline, RBAC and `securityContext` hardening (non-root, read-only FS)
-- Demo: each scenario detected by Falco or stopped by policy. Tag `v0.3-runtime`.
+- Demo: each scenario detected by Falco or stopped by policy.
 - Thesis: chapter 3 (review of existing solutions).
 
-## Phase 3. AWS
+## Phase 3. Network layer and AWS
 
-Learn: Terraform, AWS VPC and security groups, Ansible roles, Suricata, VPC Traffic Mirroring.
+Learn: Suricata, Terraform, AWS VPC and security groups, Ansible roles, VPC Traffic Mirroring.
 
-### 3.1 AWS foundations - `feat/terraform-base`
+### 3.3a Suricata on k3d - `feat/suricata-local` (beta, week 6)
+- [ ] Suricata as a DaemonSet on the node, ET Open rules, `eve.json` to Loki
+- [ ] A few own rules for the lab scenarios (for example a scan from the attacker pod)
+- [ ] Grafana dashboard with all layers on one screen
+- Demo: scan and web attacks from the attacker pod seen by several layers. Tag `v0.6-network`.
+- Thesis: chapter 4 (architecture and design).
+
+### 3.1 AWS foundations - `feat/terraform-base` (after the beta)
 - [ ] AWS Budgets alerts, IAM user for Terraform (no root keys)
 - [ ] Terraform: VPC, public subnet, security groups (access only from my IP), EC2 Graviton nodes
 - [ ] `lab-up.sh`, `lab-down.sh`, `cost-guard.sh`; `make aws-up` / `make aws-down`
 - Demo: `terraform apply` and `destroy`, cost so far.
 
-### 3.2 Ansible and k3s on EC2 - `feat/ansible-k3s`
+### 3.2 Ansible and k3s on EC2 - `feat/ansible-k3s` (after the beta)
 - [ ] Ansible role: node hardening (SSH, sysctl, firewall, auditd)
 - [ ] Ansible role: k3s server + agents, kubeconfig to the Mac
-- [ ] Deploy the whole stack from Phases 1-2 to AWS
+- [ ] Deploy the whole beta stack to AWS
 - Demo: whole lab on AWS from two commands, `make attack` against it.
 - Thesis: chapter 2 (theory) finished.
 
-### 3.3 Suricata - `feat/suricata`
+### 3.3b Suricata with Traffic Mirroring - `feat/suricata-aws` (after the beta)
 - [ ] Check that the chosen instance types are supported as Traffic Mirroring sources
-- [ ] Suricata sensor EC2, mirror session from the nodes, ET Open rules, `eve.json` to Loki
-- [ ] Own Suricata rules for the lab scenarios
-- [ ] Grafana dashboard with all three layers
-- Demo: nmap scan and web attacks seen by several layers on one dashboard. Tag `v0.4-aws`.
-- Thesis: chapter 4 (architecture and design).
+- [ ] Suricata sensor EC2, mirror session from the nodes, same rules and dashboard as locally
+- Demo: nmap scan and web attacks seen by several layers on one dashboard. Tag `v1.0-rc1` when the responder is also on AWS.
 
 ## Phase 4. Automatic response
 
 Learn: event-driven design, FastAPI background tasks, Kubernetes Python client, least-privilege RBAC.
 
-### 4.1 Responder core and correlation - `feat/responder-core`
+### 4.1 Responder core and correlation - `feat/responder-core` (beta, week 7)
 - [ ] FastAPI service, endpoints for WAF, Suricata and Falco events
 - [ ] Common event model (source, time, IP, pod, severity, rule), pytest
-- [ ] Correlation rules (N WAF hits from one IP in a window, scan followed by exploit, shell in pod)
-- [ ] Alert-only mode, Telegram notifications
+- [ ] Correlation rules (N WAF hits from one IP in a window; scan followed by exploit; shell in pod)
+- [ ] Alert-only mode, Telegram notifications (bot token in a Kubernetes Secret, never in git)
 - Demo: an attack chain produces one high-priority Telegram alert.
 
-### 4.2 Response actions, end to end - `feat/responder-actions`
+### 4.2a Minimal response - `feat/responder-block` (beta, week 7)
 - [ ] Block an IP on nginx (deny list via ConfigMap and reload, with expiry)
-- [ ] Isolate a pod with a NetworkPolicy, label it for investigation
 - [ ] Service account with minimal RBAC permissions for the responder
+- Demo: the attacker pod is blocked automatically, alert sent. Tag `v0.9-beta` after the freeze.
+
+### 4.2b Full response actions - `feat/responder-actions` (after the beta)
+- [ ] Isolate a pod with a NetworkPolicy, label it for investigation
 - [ ] Responder deployed on AWS, all layers connected
-- Demo: attack blocked automatically, pod isolated, alert sent. Tag `v0.5-responder`.
+- Demo: attack blocked automatically, pod isolated, alert sent.
 - Thesis: chapter 5 (implementation).
 
 ## Phase 5. Experiments
@@ -204,18 +272,22 @@ git log --reverse --date=short --pretty=format:'%ad %s'
 | Stage | Branch | Started | Finished | Tag |
 |---|---|---|---|---|
 | 0.1 Layer 1 prototype | `main` | | | `v0.1-layer1` |
-| 1.1 WAF tuning | `feat/waf-tuning` | | | |
-| 1.2 Rate limiting and client IP | `feat/rate-limit` | | | |
-| 1.3 Observability | `feat/observability` | | | |
-| 1.4 Own vulnerable API | `feat/vuln-api` | | | `v0.2-layer1` |
-| 2.1 Falco | `feat/falco` | | | |
-| 2.2 Cilium and NetworkPolicy | `feat/cilium-netpol` | | | |
-| 2.3 Cluster attack scenarios | `feat/k8s-attacks` | | | `v0.3-runtime` |
+| 1.1 WAF tuning | `feat/waf-tuning` | | | `v0.2-waf-tuning` |
+| 1.2 Pinned images, attacker pod, rate limiting | `feat/rate-limit` | | | `v0.3-layer1` |
+| 1.3 Observability | `feat/observability` | | | `v0.4-observability` |
+| 2.2 NetworkPolicy | `feat/netpol` | | | |
+| 2.1 Falco | `feat/falco` | | | `v0.5-runtime` |
+| 3.3a Suricata on k3d | `feat/suricata-local` | | | `v0.6-network` |
+| 4.1 Responder core | `feat/responder-core` | | | |
+| 4.2a Minimal response | `feat/responder-block` | | | `v0.9-beta` |
+| 1.4 Own vulnerable API | `feat/vuln-api` | | | |
+| 1.5 Paranoia comparison | `feat/paranoia` | | | |
+| 2.4 Cilium and Hubble | `feat/cilium` | | | |
+| 2.3 Cluster attack scenarios | `feat/k8s-attacks` | | | |
 | 3.1 AWS foundations | `feat/terraform-base` | | | |
 | 3.2 Ansible and k3s on EC2 | `feat/ansible-k3s` | | | |
-| 3.3 Suricata | `feat/suricata` | | | `v0.4-aws` |
-| 4.1 Responder core | `feat/responder-core` | | | |
-| 4.2 Response actions | `feat/responder-actions` | | | `v0.5-responder` |
+| 3.3b Suricata with Traffic Mirroring | `feat/suricata-aws` | | | |
+| 4.2b Full response actions | `feat/responder-actions` | | | `v1.0-rc1` |
 | 5.1 Experiments | `feat/experiments` | | | |
 | 5.2 Analysis | `feat/analysis` | | | `v1.0` |
 | 6 Thesis and defense | `docs/...` | | | |

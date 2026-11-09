@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: juiceshop
-          image: bkimminich/juice-shop:latest
+          image: bkimminich/juice-shop@sha256:877fc77b12d72b42e486eb09b6b1711cc56514306d92006b284e7e7cf076a809  # pinned from bkimminich/juice-shop:latest on 2026-11-09
           ports:
             - containerPort: 3000
           readinessProbe:

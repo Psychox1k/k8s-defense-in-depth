@@ -1,8 +1,8 @@
 # Layer 1: nginx + ModSecurity + OWASP Core Rule Set as a reverse proxy
 # in front of the application.
 #
-# The image is configured through environment variables, see
-# https://github.com/coreruleset/modsecurity-crs-docker
+# The image is configured through environment variables. Names below were checked against
+# the image sources (nginx/Dockerfile in https://github.com/coreruleset/modsecurity-crs-docker).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -22,13 +22,11 @@ spec:
     spec:
       containers:
         - name: waf
-          image: owasp/modsecurity-crs:nginx
+          image: owasp/modsecurity-crs@sha256:9a386aa4a9eeec9a46c61a1eaba101c846dd83b1ec125e9126e710dd61d84422  # pinned from owasp/modsecurity-crs:nginx on 2026-11-09
           ports:
             - containerPort: 8080
           env:
-            # nginx as reverse proxy to the backend
-            - name: PROXY
-              value: "1"
+            # Port nginx listens on and the backend it proxies to
             - name: PORT
               value: "8080"
             - name: BACKEND
@@ -36,16 +34,19 @@ spec:
             # WAF behaviour: On = block, DetectionOnly = log only
             - name: MODSEC_RULE_ENGINE
               value: "On"
-            # CRS tuning: paranoia level 1 and default anomaly thresholds
-            - name: PARANOIA
-              value: "1"
+            # CRS paranoia: the level that decides what is blocked, and the level whose
+            # rules are evaluated. (The older PARANOIA variable sets both and is deprecated.)
             - name: BLOCKING_PARANOIA
               value: "1"
+            - name: DETECTION_PARANOIA
+              value: "1"
+            # Anomaly score thresholds (CRS defaults)
             - name: ANOMALY_INBOUND
               value: "5"
             - name: ANOMALY_OUTBOUND
               value: "4"
-            # Audit log to stdout so `kubectl logs` shows the matched rules
+            # Audit log to stdout so `kubectl logs` shows the matched rules.
+            # RelevantOnly logs requests with a matched rule or a 4xx/5xx response status.
             - name: MODSEC_AUDIT_ENGINE
               value: "RelevantOnly"
             - name: MODSEC_AUDIT_LOG
@@ -69,10 +70,18 @@ spec:
               mountPath: /etc/modsecurity.d/owasp-crs/rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf
               subPath: REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf
               readOnly: true
+            # nginx rate limiting, picked up by `include /etc/nginx/conf.d/*.conf`
+            - name: rate-limit
+              mountPath: /etc/nginx/conf.d/rate-limit.conf
+              subPath: rate-limit.conf
+              readOnly: true
       volumes:
         - name: exclusions
           configMap:
             name: waf-exclusions
+        - name: rate-limit
+          configMap:
+            name: waf-rate-limit
 ---
 apiVersion: v1
 kind: Service
