@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
         - name: attacker
-          image: curlimages/curl:latest
+          image: curlimages/curl@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93  # pinned from curlimages/curl:latest on 2026-11-09
           # The image's entrypoint is curl itself; keep the container alive instead.
           command: ["sh", "-c", "while true; do sleep 3600; done"]
           resources:

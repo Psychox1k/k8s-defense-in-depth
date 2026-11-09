@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: waf
-          image: owasp/modsecurity-crs:nginx
+          image: owasp/modsecurity-crs@sha256:9a386aa4a9eeec9a46c61a1eaba101c846dd83b1ec125e9126e710dd61d84422  # pinned from owasp/modsecurity-crs:nginx on 2026-11-09
           ports:
             - containerPort: 8080
           env:
