@@ -16,10 +16,12 @@ correlates events from all layers and responds automatically.
 
 Timeline: from October 2026 to the end of February 2027 (project, experiments and thesis text).
 The schedule is tight. The supervisor expects visible progress every week, so keep
-`docs/progress/week-NN.md` up to date.
+`docs/progress/week-NN.md` up to date. Target for a working end-to-end beta: 15 December 2026
+(see "Beta plan" in `docs/ROADMAP.md`).
 
-**The week-by-week plan, branches and milestones are in `docs/ROADMAP.md`.** Read it at the start
-of a session to know which week and branch the work belongs to, and tick off finished tasks there.
+**The plan, branches and milestones are in `docs/ROADMAP.md`.** It is a sequence of stages
+without fixed dates. Read it at the start of a session to know which stage and branch the work
+belongs to, and tick off finished tasks there.
 
 ## Architecture
 
@@ -46,8 +48,9 @@ Experiment configurations: (1) no protection, (2) WAF only, (3) WAF + Suricata,
 
 ```
 k8s/base/      namespace and the vulnerable application (apply order is by filename prefix)
-k8s/waf/       nginx + ModSecurity + CRS
-scripts/       check-prereqs.sh, attack-demo.sh, waf-log.sh; later: lab-up/down, experiments, cost guard
+k8s/waf/       nginx + ModSecurity + CRS (waf.yaml, exclusions.yaml, rate-limit.yaml)
+k8s/attacker/  attacker pod (curl) inside the cluster, source of lab attacks
+scripts/       check-prereqs.sh, attack-demo.sh, waf-log.sh, pin_images.py; later: lab-up/down, experiments, cost guard
 terraform/     AWS infrastructure (planned)
 ansible/       node configuration (planned)
 responder/     automatic response service (planned)
@@ -57,11 +60,15 @@ docs/          ROADMAP.md, weekly progress (docs/progress/), thesis notes
 ## Commands
 
 ```bash
-make up        # k3d cluster + Juice Shop + WAF (+ port-forward on :8081)
-make attack    # same attacks directly (:8081) and through the WAF (:8080)
-make logs      # requests matched by the WAF with the CRS rules that fired (hides /socket.io/)
-make status    # pods and services
-make down      # delete the cluster
+make up            # k3d cluster + Juice Shop + WAF + attacker pod (+ port-forward on :8081)
+make attack        # attacks from the attacker pod, directly and through the WAF
+make attack-local  # same attacks from the Mac through :8081 and :8080
+make logs          # requests matched by the WAF with the CRS rules that fired (hides /socket.io/)
+make waf-reload    # apply WAF config changes and restart the WAF pod
+make pin           # pin container images in k8s/ to digests (make pin-check lists unpinned ones)
+make status        # pods and services
+make stop / start  # pause and resume the lab (frees RAM, keeps the cluster)
+make down          # delete the cluster
 ```
 
 ## Environment constraints
@@ -104,11 +111,15 @@ make down      # delete the cluster
 
 ## Current status
 
-- Done (week 1, tag `v0.1-layer1`): repository structure, local k3d cluster, Juice Shop,
+- Done: week 1 (tag `v0.1-layer1`): repository structure, local k3d cluster, Juice Shop,
   Layer 1 (nginx + ModSecurity + CRS), attack demo, WAF log parser.
-- Known issues: CRS rule 920420 blocks Juice Shop `/socket.io/` polling (false positive);
-  the WAF sees the node IP (10.42.x.x) instead of the real client IP; images use `latest`.
-- Now: week 2, branch `feat/waf-tuning` (see `docs/ROADMAP.md`).
+  Week 2 (tag `v0.2-waf-tuning`): socket.io false positive fixed with a narrow exclusion, `make stop/start`.
+- Known issues: requests from the Mac (port-forward or load balancer) reach the WAF with the node IP,
+  not the client IP (attacks from the attacker pod do not have this problem); the app is reachable
+  bypassing the WAF until NetworkPolicy (stage 2.2); the audit log is RelevantOnly (matched rules and
+  4xx/5xx responses).
+- Now: stage 1.2, branch `feat/rate-limit` (pinned images, attacker pod, rate limiting). Beta target
+  15 December, weekly plan in `docs/ROADMAP.md`.
 
 (Update this section at the end of every working session.)
 
