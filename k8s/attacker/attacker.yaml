@@ -1,0 +1,36 @@
+# Attacker pod: a tiny curl container inside the cluster, used as the source of lab attacks.
+#
+# Why inside the cluster: requests from the Mac arrive at the WAF through the load balancer
+# and look like they come from the node, so the WAF cannot tell clients apart. From this
+# pod the WAF sees the pod's own IP, which is what rate limiting, IP blocking and the
+# automatic response need. It is also a realistic "compromised pod" for later scenarios.
+#
+# Lab use only. Run attacks only against the resources deployed from this repo.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: attacker
+  namespace: defense-lab
+  labels:
+    app: attacker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: attacker
+  template:
+    metadata:
+      labels:
+        app: attacker
+    spec:
+      containers:
+        - name: attacker
+          image: curlimages/curl:latest
+          # The image's entrypoint is curl itself; keep the container alive instead.
+          command: ["sh", "-c", "while true; do sleep 3600; done"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
